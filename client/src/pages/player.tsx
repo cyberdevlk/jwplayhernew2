@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { AlertCircle, RotateCcw, Home, Info } from "lucide-react";
+import { AlertCircle, RotateCcw, Home, Info, Maximize } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 declare global {
   interface Window {
@@ -9,12 +16,18 @@ declare global {
   }
 }
 
+type StretchingMode = "fill" | "uniform" | "exactfit" | "none";
+
 export default function Player() {
   const [, params] = useRoute("/Play/*");
   const [, downloadParams] = useRoute("/Down/*");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [stretchingMode, setStretchingMode] = useState<StretchingMode>(() => {
+    const saved = localStorage.getItem('jwplayer-stretching-mode');
+    return (saved as StretchingMode) || 'fill';
+  });
   const playerRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<any>(null);
   const [, setLocation] = useLocation();
@@ -95,7 +108,7 @@ export default function Player() {
         }
       }
     };
-  }, [videoUrl, isDownloadMode]);
+  }, [videoUrl, isDownloadMode, stretchingMode]);
 
   const initPlayer = () => {
     if (!window.jwplayer || !playerRef.current || !videoUrl) return;
@@ -115,8 +128,8 @@ export default function Player() {
         aspectratio: "16:9",
         preload: "auto",
         
-        // FIXED: Changed stretching from 'uniform' to 'fill' to eliminate dark backgrounds
-        stretching: "fill", // Options: "uniform", "exactfit", "fill", "none"
+        // Stretching mode - user can toggle between modes
+        stretching: stretchingMode,
         
         // FIXED: Removed semi-transparent black background and simplified skin config
         skin: {
@@ -144,7 +157,7 @@ export default function Player() {
       player.on('ready', () => {
         setIsLoading(false);
         console.log('✅ JW Player initialized with fixed settings');
-        console.log('✅ Stretching mode: fill');
+        console.log(`✅ Stretching mode: ${stretchingMode}`);
         console.log('✅ Dark background removed');
 
         // Add custom skip buttons
@@ -270,6 +283,11 @@ export default function Player() {
     setLocation('/');
   };
 
+  const handleStretchingModeChange = (mode: StretchingMode) => {
+    setStretchingMode(mode);
+    localStorage.setItem('jwplayer-stretching-mode', mode);
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center" data-testid="error-overlay">
@@ -312,17 +330,35 @@ export default function Player() {
         </div>
       )}
 
-      {/* Back to Home Button */}
-      <Button
-        onClick={handleGoHome}
-        className="absolute top-4 left-4 z-40 flex items-center gap-2"
-        variant="secondary"
-        size="sm"
-        data-testid="button-back-home"
-      >
-        <Home className="w-4 h-4" />
-        Home
-      </Button>
+      {/* Top Controls */}
+      <div className="absolute top-4 left-4 z-40 flex items-center gap-3">
+        <Button
+          onClick={handleGoHome}
+          variant="secondary"
+          size="sm"
+          className="flex items-center gap-2"
+          data-testid="button-back-home"
+        >
+          <Home className="w-4 h-4" />
+          Home
+        </Button>
+
+        {/* Stretching Mode Selector */}
+        <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-1.5">
+          <Maximize className="w-4 h-4 text-muted-foreground" />
+          <Select value={stretchingMode} onValueChange={handleStretchingModeChange}>
+            <SelectTrigger className="w-[130px] h-8 text-sm border-0 focus:ring-0 shadow-none" data-testid="select-stretching-mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fill" data-testid="stretching-fill">Fill (No Bars)</SelectItem>
+              <SelectItem value="uniform" data-testid="stretching-uniform">Uniform (Fit)</SelectItem>
+              <SelectItem value="exactfit" data-testid="stretching-exactfit">Exact Fit</SelectItem>
+              <SelectItem value="none" data-testid="stretching-none">None (Original)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Keyboard Shortcuts Help */}
       <div className="absolute bottom-4 right-4 z-40">
