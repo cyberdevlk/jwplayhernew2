@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useRoute, useLocation } from "wouter";
-import { AlertCircle, RotateCcw, Home, Info, Maximize } from "lucide-react";
+import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 declare global {
   interface Window {
@@ -16,27 +8,35 @@ declare global {
   }
 }
 
-type StretchingMode = "fill" | "uniform" | "exactfit" | "none";
-
 export default function Player() {
-  const [, params] = useRoute("/Play/*");
-  const [, downloadParams] = useRoute("/Down/*");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showInfo, setShowInfo] = useState(false);
-  const [stretchingMode, setStretchingMode] = useState<StretchingMode>(() => {
-    const saved = localStorage.getItem('jwplayer-stretching-mode');
-    return (saved as StretchingMode) || 'fill';
-  });
   const playerRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<any>(null);
-  const [, setLocation] = useLocation();
 
-  const isDownloadMode = downloadParams !== null;
-  const routeParams = isDownloadMode ? downloadParams : params;
-  const videoUrl: string = (routeParams && typeof routeParams === 'object' && '*' in routeParams)
-    ? (routeParams['*'] as string)
-    : '';
+  // Get video URL from current window location
+  const getVideoUrl = () => {
+    const path = window.location.pathname;
+    
+    // Check for /Play/ or /Down/ routes
+    const playMatch = path.match(/\/Play\/(.+)/);
+    const downMatch = path.match(/\/Down\/(.+)/);
+    
+    if (downMatch) {
+      // Handle download mode
+      const url = decodeURIComponent(downMatch[1]);
+      window.location.href = `/api/download?url=${encodeURIComponent(url)}`;
+      return null;
+    }
+    
+    if (playMatch) {
+      return decodeURIComponent(playMatch[1]);
+    }
+    
+    return null;
+  };
+
+  const videoUrl = getVideoUrl();
 
   useEffect(() => {
     // Load JW Player script with fallback CDN URLs
@@ -88,11 +88,6 @@ export default function Player() {
     };
 
     if (videoUrl) {
-      if (isDownloadMode) {
-        // Handle download mode
-        window.location.href = `/api/download?url=${encodeURIComponent(videoUrl)}`;
-        return;
-      }
       loadJWPlayer();
     } else {
       setError('No video URL provided');
@@ -108,7 +103,7 @@ export default function Player() {
         }
       }
     };
-  }, [videoUrl, isDownloadMode, stretchingMode]);
+  }, [videoUrl]);
 
   const initPlayer = () => {
     if (!window.jwplayer || !playerRef.current || !videoUrl) return;
@@ -120,23 +115,21 @@ export default function Player() {
       // Decode the video URL
       const decodedVideoUrl = decodeURIComponent(videoUrl);
 
-      // Initialize player with FIXED configuration
+      // Initialize player with uniform stretching mode
       const player = window.jwplayer(playerRef.current).setup({
         file: decodedVideoUrl,
         width: "100%",
-        height: "100vh",
+        height: "100%",
         aspectratio: "16:9",
         preload: "auto",
         
-        // Stretching mode - user can toggle between modes
-        stretching: stretchingMode,
+        // Fixed to uniform (fit) mode
+        stretching: "uniform",
         
-        // FIXED: Removed semi-transparent black background and simplified skin config
         skin: {
           name: "custom",
-          active: "#e50914", // Primary red color for active elements
-          inactive: "#ffffff" // White for inactive elements
-          // REMOVED: background: "rgba(0, 0, 0, 0.5)" - This was causing the dark overlay
+          active: "#e50914",
+          inactive: "#ffffff"
         },
         
         controls: true,
@@ -156,9 +149,7 @@ export default function Player() {
       // Player event handlers
       player.on('ready', () => {
         setIsLoading(false);
-        console.log('✅ JW Player initialized with fixed settings');
-        console.log(`✅ Stretching mode: ${stretchingMode}`);
-        console.log('✅ Dark background removed');
+        console.log('✅ JW Player initialized with uniform fit mode');
 
         // Add custom skip buttons
         player.addButton(
@@ -172,7 +163,7 @@ export default function Player() {
         );
 
         player.addButton(
-          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.12-.32.04-.29.04-.48v-.97z"/></svg>',
+          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.12-.32.04-.29.04-.48v-.97z"/></svg>',
           'Skip Forward 10s',
           () => {
             const currentPosition = player.getPosition();
@@ -232,10 +223,6 @@ export default function Player() {
             e.preventDefault();
             player.setMute(!player.getMute());
             break;
-          case '?':
-            e.preventDefault();
-            setShowInfo(!showInfo);
-            break;
         }
       };
 
@@ -279,140 +266,38 @@ export default function Player() {
     window.location.reload();
   };
 
-  const handleGoHome = () => {
-    setLocation('/');
-  };
-
-  const handleStretchingModeChange = (mode: StretchingMode) => {
-    setStretchingMode(mode);
-    localStorage.setItem('jwplayer-stretching-mode', mode);
-  };
-
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" data-testid="error-overlay">
+      <div className="fixed inset-0 bg-black flex items-center justify-center overflow-hidden">
         <div className="text-center max-w-md px-4">
-          <AlertCircle className="w-16 h-16 text-primary mx-auto mb-4" data-testid="icon-error" />
-          <h2 className="text-2xl font-bold mb-2" data-testid="text-error-title">Playback Error</h2>
-          <p className="text-muted-foreground mb-6" data-testid="text-error-message">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <Button onClick={handleRetry} className="flex items-center gap-2" data-testid="button-retry">
-              <RotateCcw className="w-4 h-4" />
-              Retry
-            </Button>
-            <Button onClick={handleGoHome} variant="outline" className="flex items-center gap-2" data-testid="button-home">
-              <Home className="w-4 h-4" />
-              Home
-            </Button>
-          </div>
+          <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2 text-white">Playback Error</h2>
+          <p className="text-gray-400 mb-6">{error}</p>
+          <Button onClick={handleRetry} className="flex items-center gap-2 mx-auto bg-red-600 hover:bg-red-700">
+            <RotateCcw className="w-4 h-4" />
+            Retry
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-screen bg-black relative" data-testid="player-container">
+    <div className="fixed inset-0 w-full h-full bg-black overflow-hidden">
       {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-background flex items-center justify-center z-50" data-testid="loading-overlay">
+        <div className="absolute inset-0 bg-black flex items-center justify-center z-50">
           <div className="text-center">
-            <div className="w-12 h-12 border-4 border-muted border-t-primary rounded-full animate-spin mx-auto mb-4" data-testid="loading-spinner"></div>
-            <p className="text-foreground text-lg mb-2" data-testid="text-loading">Loading video player...</p>
-            <p className="text-muted-foreground text-sm" data-testid="text-loading-details">Initializing with optimized settings</p>
+            <div className="w-12 h-12 border-4 border-gray-800 border-t-red-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white text-lg mb-2">Loading video player...</p>
+            <p className="text-gray-400 text-sm">Initializing with uniform fit mode</p>
           </div>
         </div>
       )}
 
-      {/* Info Banner */}
-      {showInfo && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-primary text-primary-foreground px-6 py-3 rounded-lg z-40 max-w-md text-center text-sm" data-testid="info-banner">
-          Player initialized with fixed settings - No dark background!
-        </div>
-      )}
-
-      {/* Top Controls */}
-      <div className="absolute top-4 left-4 z-40 flex items-center gap-3">
-        <Button
-          onClick={handleGoHome}
-          variant="secondary"
-          size="sm"
-          className="flex items-center gap-2"
-          data-testid="button-back-home"
-        >
-          <Home className="w-4 h-4" />
-          Home
-        </Button>
-
-        {/* Stretching Mode Selector */}
-        <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-1.5">
-          <Maximize className="w-4 h-4 text-muted-foreground" />
-          <Select value={stretchingMode} onValueChange={handleStretchingModeChange}>
-            <SelectTrigger className="w-[130px] h-8 text-sm border-0 focus:ring-0 shadow-none" data-testid="select-stretching-mode">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="fill" data-testid="stretching-fill">Fill (No Bars)</SelectItem>
-              <SelectItem value="uniform" data-testid="stretching-uniform">Uniform (Fit)</SelectItem>
-              <SelectItem value="exactfit" data-testid="stretching-exactfit">Exact Fit</SelectItem>
-              <SelectItem value="none" data-testid="stretching-none">None (Original)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Keyboard Shortcuts Help */}
-      <div className="absolute bottom-4 right-4 z-40">
-        <Button
-          onClick={() => setShowInfo(!showInfo)}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
-          data-testid="button-toggle-info"
-        >
-          <Info className="w-4 h-4" />
-          Info
-        </Button>
-      </div>
-
-      {showInfo && (
-        <div className="absolute bottom-16 right-4 bg-card border border-border rounded-lg p-4 z-40 max-w-xs" data-testid="shortcuts-help">
-          <h3 className="font-semibold mb-3 text-primary">Keyboard Shortcuts</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Play/Pause</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">Space</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Skip Back</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">←</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Skip Forward</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">→</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Volume Up</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">↑</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Volume Down</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">↓</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Fullscreen</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">F</kbd>
-            </div>
-            <div className="flex justify-between">
-              <span>Mute</span>
-              <kbd className="bg-muted px-2 py-1 rounded text-xs">M</kbd>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Player Container */}
+      {/* Player Container - Full viewport, no scrollbars */}
       <div className="w-full h-full">
-        <div ref={playerRef} className="w-full h-full" data-testid="jwplayer-container" />
+        <div ref={playerRef} className="w-full h-full" />
       </div>
     </div>
   );
